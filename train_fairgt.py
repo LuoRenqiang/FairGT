@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,9 +11,7 @@ import os
 from utils import feature_normalize,fair_metric,sparse_2_edge_index,set_seed,train_val_test_split,laplacian_positional_encoding,\
     laplace_decomp,re_features,load_dataset,adjacency_positional_encoding,get_same_sens_complete_graph,get_same_sens_sub_complete_graph
 from sklearn.metrics import f1_score, roc_auc_score
-# from gtbaselines import GraphTransformer, SAN, SAN_NodeLPE, Specformer, NAGphormer
 from model import FairGT
-# import utils
 import pandas as pd
 import random
 import argparse
@@ -31,39 +31,22 @@ parser.add_argument('--seed', type=int, default=20, help='Random seed.') # 20 22
 parser.add_argument('--hops', type=int, default=2, help='Hop of neighbors to be calculated') # nagphormer,fairgt
 parser.add_argument('--pe_dim', type=int, default=2, help='position embedding size') # nagphormer and san
 parser.add_argument('--hidden_dim', type=int, default=64, help='Hidden layer size')
-parser.add_argument('--n_heads', type=int, default=2, help='Number of Transformer heads') # 8
-parser.add_argument('--n_layers', type=int, default=1, help='Number of Transformer layers') #1
+parser.add_argument('--nhead', type=int, default=2, help='Number of Transformer heads') # 8
+parser.add_argument('--nlayer', type=int, default=1, help='Number of Transformer layers') #1
 parser.add_argument('--dropout', type=float, default=0.3, help='Dropout')
 parser.add_argument('--self_loop', type=bool, default=False, help='FFN layer size')
 parser.add_argument('--peak_lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=1e-5, help='weight decay')
-parser.add_argument('--subnum', type=int, default=1000, help='position embedding size') # nagphormer and san
+# parser.add_argument('--subnum', type=int, default=1000, help='position embedding size') # nagphormer and san
 
 parser.add_argument('--sens_idex', type=bool, default=False, help='FFN layer size')
 parser.add_argument('--is_lap', type=bool, default=False, help='FFN layer size')
-parser.add_argument('--is_subgraph', type=bool, default=False, help='FFN layer size')
+# parser.add_argument('--is_subgraph', type=bool, default=False, help='FFN layer size')
 # parser.add_argument('--readout_nlayers', type=int, default=1, help='Number of Transformer layers') #1
 # parser.add_argument('--attention_dropout', type=float, default=0.1, help='Dropout in the attention layer')
-parser.add_argument('--batch_size', type=int, default=1000, help='Batch size')
+# parser.add_argument('--batch_size', type=int, default=1000, help='Batch size')
 parser.add_argument('--epochs', type=int, default=2000, help='Number of epochs to train.')
 parser.add_argument('--patience', type=int, default=200, help='Patience for early stopping')
-
-# graphtransformer and san
-parser.add_argument('--readout_nlayers', type=int, default=1, help='Hidden layer size')
-parser.add_argument('--layer_norm', type=bool, default=True, help='FFN layer size')
-parser.add_argument('--batch_norm', type=bool, default=False, help='FFN layer size')
-parser.add_argument('--residual', type=bool, default=True, help='FFN layer size')
-
-# graphtransformer
-# parser.add_argument('--pos_enc_dim', type=int, default=5, help='Hidden layer size')
-parser.add_argument('--lap_pos_enc', type=bool, default=True, help='FFN layer size')
-parser.add_argument('--wl_pos_enc', type=bool, default=False, help='FFN layer size')
-
-# san
-parser.add_argument('--full_graph', type=bool, default=False, help='FFN layer size')
-
-# specformer
-parser.add_argument('--norm', type=str, default='none', help='FFN layer size')
 
 
 parser.add_argument('--metric', type=int, default=7, help='metric') # 1acc 2loss 3
@@ -74,7 +57,7 @@ args = parser.parse_args()
 
 is_batch=False
 args.is_subgraph=True
-# ## 导入数据 nba
+#
 label_number=1000
 
 # device = args.device
@@ -89,7 +72,7 @@ idx_train = torch.LongTensor(idx_train)
 idx_val = torch.LongTensor(idx_val)
 idx_test = torch.LongTensor(idx_test)
 # print('train:',len(idx_train),'val:',len(idx_val),'test:',len(idx_test))
-# labels里面有-1 ，但是idx_train, idx_val, idx_test没有
+
 
 edge_list = (adj != 0).nonzero()
 g = dgl.DGLGraph()
@@ -102,23 +85,19 @@ if args.model=='fairgt':
     lpe=None
     filepath = './PE_files/'+args.model+'/'+args.dataset+'_'+str(args.pe_dim)+'_eig.pt'
     try:
-        # 尝试读取pt文件
+        # 
         eignvalue, eignvector = torch.load(filepath)
         lpe=eignvector
     except FileNotFoundError:
         print('pe file no exist!')
-        # 如果文件不存在，保存一个空的Tensor对象到指定路径
+        #
         eignvalue, eignvector = adjacency_positional_encoding(adj, args.pe_dim) 
         torch.save([eignvalue, eignvector], filepath)
         lpe=eignvector
     # get_same_sens_complete_graph    
     features = torch.cat((feature, lpe), dim=1) 
-    if args.dataset=='pokec_z' or args.dataset=='pokec_n' :
-        print('subgraph split')
-        adj = get_same_sens_sub_complete_graph(adj, sens, args.subnum, args)
-    else:
-        print('original graph')
-        adj = get_same_sens_complete_graph(adj, sens, args)
+    print('original graph')
+    adj = get_same_sens_complete_graph(adj, sens, args)
     # adj = torch.from_numpy(adj.todense())
     processed_features = re_features(adj, features, args.hops)
     g.ndata['feat'] = processed_features
@@ -136,12 +115,26 @@ labels, idx_train, idx_val, idx_test, sens = labels.to(device), idx_train.to(dev
 edge_index = None
 
 
+val_loss_list, val_acc_list, val_auc_list, val_f1_list, val_sp_list, val_eo_list = [],[],[],[],[],[]
+test_loss_list, test_acc_list, test_auc_list, test_f1_list, test_sp_list, test_eo_list = [],[],[],[],[],[]
+
+patience = args.patience
+
 res = []
 # min_loss = 100.0
 epoch=args.epochs
-best_metric = -999998.0
-max_acc1=None
-new_metric = -999999.0
+# best_metric = -999998.0
+# max_acc1=None
+# new_metric = -999999.0
+rec_val=None
+best_metric_val = -999998.0
+metric_val = -999999.0
+
+rec_test=None
+best_metric_test = -999998.0
+metric_test = -999999.0
+
+
 # args.metric=4
 if args.metric==1: # acc
     print('metric: acc')
@@ -162,6 +155,8 @@ counter = 0
 evaluation = torchmetrics.Accuracy(task='multiclass', num_classes=nclass)
 end = time.time()
 # print('success load data, time is:{:.3f}'.format(end-start))
+print('='*10,"Start Training: ",args.dataset,'='*10)
+
 train_start = time.time()
 train_time=0
 for idx in range(epoch):
@@ -180,42 +175,69 @@ for idx in range(epoch):
     val_acc = evaluation(logits[idx_val].cpu(), labels[idx_val].cpu()).item()
     val_auc_roc = roc_auc_score(labels[idx_val].cpu().numpy(), F.softmax(logits,dim=1)[idx_val,1].detach().cpu().numpy())
     val_f1 = f1_score(labels[idx_val].cpu().numpy(),logits[idx_val].detach().cpu().argmax(dim=1))
-    val_parity, val_equality = fair_metric(labels, sens, torch.argmax(logits, dim=1), idx_val)
+    val_sp, val_eo = fair_metric(labels, sens, torch.argmax(logits, dim=1), idx_val)
     
+    test_loss = F.cross_entropy(logits[idx_test], labels[idx_test]).item()
     test_acc = evaluation(logits[idx_test].cpu(), labels[idx_test].cpu()).item()
     test_auc_roc = roc_auc_score(labels[idx_test].cpu().numpy(), F.softmax(logits,dim=1)[idx_test,1].detach().cpu().numpy())
     test_f1 = f1_score(labels[idx_test].cpu().numpy(),logits[idx_test].detach().cpu().argmax(dim=1))
-    test_parity, test_equality = fair_metric(labels, sens, torch.argmax(logits, dim=1), idx_test)
+    test_sp, test_eo = fair_metric(labels, sens, torch.argmax(logits, dim=1), idx_test)
     
     # acc, sp, eo, f1, auc, epoch
     # res.append([100 * test_acc, 100 * parity, 100 * equality, f1_test, auc_roc_test,(idx+1)])
-    res.append([100 * test_acc, 100 * test_parity, 100 * test_equality, 100 * test_f1, 100 * test_auc_roc, (idx+1)])
+    res.append([100 * test_acc, 100 * test_sp, 100 * test_eo, 100 * test_f1, 100 * test_auc_roc, (idx+1)])
 
     # new_metric = (val_acc-val_parity-val_equality)
+    # if args.metric==1: # acc
+    #     new_metric = val_acc
+    # elif args.metric==2: # loss
+    #     new_metric = -val_loss
+    # elif args.metric==3 and idx>100: # -sp-eo
+    #     new_metric = (-val_parity-val_equality)
+    # elif args.metric==4: # val_acc-val_parity-val_equality
+    #     new_metric = (val_acc-val_parity-val_equality)
+    # elif args.metric==5: # val_f1-val_parity-val_equality
+    #     new_metric = (val_f1-val_parity-val_equality)
+    # elif args.metric==6: # val_auc-val_parity-val_equality
+    #     new_metric = (val_auc_roc-val_parity-val_equality)
+    # elif args.metric==7: # val_acc-val_parity-val_equality
+    #     new_metric = (val_acc-val_parity)
+    
     if args.metric==1: # acc
-        new_metric = val_acc
+        metric_val = val_acc
+        metric_test = test_acc
     elif args.metric==2: # loss
-        new_metric = -val_loss
-    elif args.metric==3 and idx>100: # -sp-eo
-        new_metric = (-val_parity-val_equality)
+        metric_val = -val_loss
+        metric_test = -test_loss
+    elif args.metric==3: # -sp-eo
+        metric_val = (-val_sp-val_eo)
+        metric_test = (-test_sp-test_eo)
     elif args.metric==4: # val_acc-val_parity-val_equality
-        new_metric = (val_acc-val_parity-val_equality)
+        metric_val = (val_acc-val_sp-val_eo)
+        metric_test = (test_acc-test_sp-test_eo)
     elif args.metric==5: # val_f1-val_parity-val_equality
-        new_metric = (val_f1-val_parity-val_equality)
+        metric_val = (val_f1-val_sp-val_eo)
+        metric_test = (test_f1-test_sp-test_eo)
     elif args.metric==6: # val_auc-val_parity-val_equality
-        new_metric = (val_auc_roc-val_parity-val_equality)
-    elif args.metric==7: # val_acc-val_parity-val_equality
-        new_metric = (val_acc-val_parity)
-        
-    if new_metric > best_metric and (idx+1)>=10:
-        best_metric = new_metric
-        max_acc1 = res[-1]
+        metric_val = (val_auc_roc-val_sp-val_eo)
+        metric_test = (test_auc_roc-test_sp-test_eo)
+    elif args.metric==7: # val_acc-val_parity
+        metric_val = (val_acc-val_sp)
+        metric_test = (test_acc-test_sp)
+    
+    if metric_val > best_metric_val and val_sp>0 and (idx+1)>=10:
+        best_metric_val = metric_val
+        rec_val = res[-1]
         counter = 0 
     else:
         counter += 1
-        
+    
+    if metric_test > best_metric_test and epoch>5 and test_sp>0:
+        best_metric_test = metric_test
+        rec_test = res[-1]
+    
     if (idx+1)%10==0:
-        print('epoch:{:05d}, val_loss{:.4f}, test_acc:{:.4f}, parity:{:.4f}, equality:{:.4f}, f1:{:.4f}, auc:{:.4f}'.format(idx+1, val_loss, 100 * test_acc, 100 * test_parity, 100 * test_equality, 100 * test_f1, 100 * test_auc_roc ))
+        print('epoch:{:05d}, val_loss{:.4f}, test_acc:{:.4f}, parity:{:.4f}, equality:{:.4f}, f1:{:.4f}, auc:{:.4f}'.format(idx+1, val_loss, 100 * test_acc, 100 * test_sp, 100 * test_eo, 100 * test_f1, 100 * test_auc_roc ))
     
     if counter == args.patience:
     # if counter > 200 and (idx+1)>500:
@@ -224,12 +246,19 @@ for idx in range(epoch):
         print('success train data, time is:{:.3f}'.format(train_time))
         break
     
+train_end = time.time()
+train_time = (train_end-train_start)
+print('success train data, time is:{:.3f}'.format(train_time))
 
 max_memory_cached = torch.cuda.max_memory_cached(device=device) / 1024 ** 2 
 max_memory_allocated = torch.cuda.max_memory_allocated(device=device) / 1024 ** 2
 print("Max memory cached:", max_memory_cached, "MB")
 print("Max memory allocated:", max_memory_allocated, "MB")
-print('final_test_acc:', max_acc1[0], 'parity:',max_acc1[1],'equality:', max_acc1[2] ,'f1:',max_acc1[3] ,'auc:',max_acc1[4], 'epoch:',max_acc1[5])
+# print('final_test_acc:', max_acc1[0], 'parity:',max_acc1[1],'equality:', max_acc1[2] ,'f1:',max_acc1[3] ,'auc:',max_acc1[4], 'epoch:',max_acc1[5])
+print('best val -- acc: {:.4f}, parity: {:.4f}, equality: {:.4f}, f1: {:.4f}, auc: {:.4f}, epoch: {:04d}'.format(rec_val[0],rec_val[1],rec_val[2],rec_val[3],rec_val[4],rec_val[5]))
+print('best test -- acc: {:.4f}, parity: {:.4f}, equality: {:.4f}, f1: {:.4f}, auc: {:.4f}, epoch: {:04d}'.format(rec_test[0],rec_test[1],rec_test[2],rec_test[3],rec_test[4],rec_test[5]))
+
+
 print(args)
 
 
@@ -239,9 +268,9 @@ train_logs['dataset']=args.dataset
 # train_logs.update(vars(args))
 train_logs['seed']=args.seed
 train_logs['hidden_dim']=args.hidden_dim
-train_logs['nlayer']=args.n_layers
-train_logs['nheads']=args.n_heads
-train_logs['readoutnlayer']=args.readout_nlayers
+train_logs['nlayer']=args.nlayer
+train_logs['nheads']=args.nhead
+# train_logs['readoutnlayer']=args.readout_nlayers
 train_logs['dropout']=args.dropout
 train_logs['pe_dim']=args.pe_dim
 # train_logs['K']=args.K
@@ -253,12 +282,12 @@ train_logs['train_num']=len(idx_train)
 train_logs['val_num']=len(idx_val)
 train_logs['test_num']=len(idx_test)
 train_logs['attr_num']=g.ndata['feat'].shape[0]
-train_logs['TestAcc']=max_acc1[0]
-train_logs['TestSP']=max_acc1[1]
-train_logs['TestEO']=max_acc1[2]
-train_logs['TestF1']=max_acc1[3]
-train_logs['TestAUC']=max_acc1[4]
-train_logs['best_epoch']=max_acc1[5]
+train_logs['TestAcc']=rec_val[0]
+train_logs['TestSP']=rec_val[1]
+train_logs['TestEO']=rec_val[2]
+train_logs['TestF1']=rec_val[3]
+train_logs['TestAUC']=rec_val[4]
+train_logs['best_epoch']=rec_val[5]
 train_logs['Maxcached']=max_memory_cached
 train_logs['Maxallocated']=max_memory_allocated
 train_logs['train_time(s)']=train_time
@@ -267,8 +296,9 @@ train_logs = pd.DataFrame(train_logs, index=[0])
 
 logs_path = './logs/'
 # logs_path = './logs/'
-train_log_save_file=logs_path+'FairGT'+'_train_log.csv'
+# train_log_save_file=logs_path+'FairGT'+'_train_log.csv'
 # test_log_save_file=logs_path+dataname+'_test.csv'
+train_log_save_file=logs_path+'FairGT'+'_train_log_gpu_'+str(args.gpuid)+'.csv'
 
 if os.path.exists(train_log_save_file): # add
     train_logs.to_csv(train_log_save_file, mode='a', index=False, header=0)
