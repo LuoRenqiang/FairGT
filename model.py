@@ -5,9 +5,9 @@ import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
 
-def init_params(module, n_layers):
+def init_params(module, nlayer):
     if isinstance(module, nn.Linear):
-        module.weight.data.normal_(mean=0.0, std=0.02 / math.sqrt(n_layers))
+        module.weight.data.normal_(mean=0.0, std=0.02 / math.sqrt(nlayer))
         if module.bias is not None:
             module.bias.data.zero_()
     if isinstance(module, nn.Embedding):
@@ -36,9 +36,9 @@ class FairGT(nn.Module):
         self.hidden_dim = net_params['hidden_dim']
         # self.ffn_dim = 
         self.ffn_dim = 2 * self.hidden_dim
-        self.num_heads = net_params['n_heads']
+        self.num_heads = net_params['nhead']
         
-        self.n_layers = net_params['n_layers']
+        self.nlayer = net_params['nlayer']
         self.n_class = net_params['nclass']
 
         self.dropout_rate = net_params['dropout']
@@ -47,7 +47,7 @@ class FairGT(nn.Module):
         self.att_embeddings_nope = nn.Linear(self.input_dim, self.hidden_dim)
 
         encoders = [EncoderLayer(self.hidden_dim, self.ffn_dim, self.dropout_rate, self.attention_dropout_rate, self.num_heads)
-                    for _ in range(self.n_layers)]
+                    for _ in range(self.nlayer)]
         self.layers = nn.ModuleList(encoders)
         self.final_ln = nn.LayerNorm(self.hidden_dim)
 
@@ -62,7 +62,7 @@ class FairGT(nn.Module):
         self.scaling = nn.Parameter(torch.ones(1) * 0.5)
 
 
-        self.apply(lambda module: init_params(module, n_layers=self.n_layers))
+        self.apply(lambda module: init_params(module, nlayer=self.nlayer))
 
     def forward(self, batched_data):
 
