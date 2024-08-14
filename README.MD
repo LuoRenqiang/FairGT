@@ -11,13 +11,21 @@ PyTorch implementation of FairGT [1].
 #### train fairgt
 
 ```shell
-python train_fairgt.py --dataset german
+python train_fairgt.py --gpuid 0 --dataset "nba" --hops 3 --pe_dim 7 --hidden_dim 256 --nhead 2 --nlayer 2
+
+python train_fairgt.py --gpuid 0 --dataset "german" --hops 1 --pe_dim 7 --hidden_dim 128 --nhead 1 --nlayer 1
+
+python train_fairgt.py --gpuid 0 --dataset "income" --hops 1 --pe_dim 2 --hidden_dim 16 --nhead 1 --nlayer 1
+
+python train_fairgt.py --gpuid 0 --dataset "bail" --hops 3 --pe_dim 3 --hidden_dim 128 --nhead 2 --nlayer 2
+
+python train_fairgt.py --gpuid 0 --dataset "credit" --hops 2 --pe_dim 8 --hidden_dim 64 --nhead 1 --nlayer 1
 ```
 
 
 ## References
 
-[1] [ Renqiang Luo, Huafei Huang, Shuo Yu, Xiuzhen Zhang and Feng Xia, "FairGT: A Fairness-aware Graph Transformer," *International Joint Conference on Artificial  Intelligence (IJCAI)*, 2024.]()
+[1] [ Renqiang Luo, Huafei Huang, Shuo Yu, Xiuzhen Zhang and Feng Xia, "FairGT: A Fairness-aware Graph Transformer," *International Joint Conference on Artificial  Intelligence (IJCAI)*, 2024.](https://www.ijcai.org/proceedings/2024/50)
 
 
 
