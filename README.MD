@@ -1,6 +1,6 @@
 
 
-# FairGT: A Fairness-aware Graph Transformer in Pytorch
+# FairGT: A Fairness-aware Graph Transformer
 
 PyTorch implementation of FairGT [1].
 
